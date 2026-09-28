@@ -82,6 +82,12 @@ public class GameLog extends Observable implements Serializable {
         }
     }
 
+    void addResearchUnflaggedDiscard(forge.game.event.GameEventCardChangeZone event) {
+        if (ResearchMode.isEnabled()) {
+            ResearchGameLogJson.appendUnflaggedDiscard(researchLogId, ++researchEventIndex, event);
+        }
+    }
+
     /** All entries in chronological (insertion) order — note {@link #getLogEntries} returns newest-first. */
     public List<GameLogEntry> getAllEntries() {
         return new ArrayList<>(log);
