@@ -96,6 +96,8 @@ public class AiController {
     private int lastAttackAggression;
     private boolean useLivingEnd;
     private List<SpellAbility> skipped;
+    private static final java.util.concurrent.atomic.AtomicLong RESEARCH_DECISION_IDS =
+            new java.util.concurrent.atomic.AtomicLong();
 
     public AiController(final Player computerPlayer, final Game game0) {
         player = computerPlayer;
@@ -1596,10 +1598,21 @@ public class AiController {
             Sentry.captureMessage(ex.getMessage() + "\nAssertionError [verifyTransitivity]: " + assertex);
         }
 
+        final boolean researchDecision = ResearchMode.isEnabled();
+        final long researchDecisionId = researchDecision ? RESEARCH_DECISION_IDS.incrementAndGet() : 0;
+        final List<Map.Entry<SpellAbility, AiPlayDecision>> researchEvaluated =
+                researchDecision ? Collections.synchronizedList(new ArrayList<>()) : null;
+        final java.util.concurrent.atomic.AtomicInteger researchExpandedCount =
+                researchDecision ? new java.util.concurrent.atomic.AtomicInteger() : null;
+
         FutureTask<SpellAbility> future = new FutureTask<>(() -> {
             //avoid ComputerUtil.aiLifeInDanger in loops as it slows down a lot.. call this outside loops will generally be fast...
             boolean isLifeInDanger = useLivingEnd && ComputerUtil.aiLifeInDanger(player, true, 0);
-            for (final SpellAbility sa : ComputerUtilAbility.getOriginalAndAltCostAbilities(all, player)) {
+            final List<SpellAbility> expandedCandidates = ComputerUtilAbility.getOriginalAndAltCostAbilities(all, player);
+            if (researchDecision) {
+                researchExpandedCount.set(expandedCandidates.size());
+            }
+            for (final SpellAbility sa : expandedCandidates) {
                 if (Thread.currentThread().isInterrupted()) {
                     break;
                 }
@@ -1669,6 +1682,10 @@ public class AiController {
                 // PhaseHandler ph = game.getPhaseHandler();
                 // System.out.printf("Ai thinks '%s' of %s -> %s @ %s %s >>> \n", opinion, sa.getHostCard(), sa, Lang.getInstance().getPossesive(ph.getPlayerTurn().getName()), ph.getPhase());
 
+                if (researchDecision) {
+                    researchEvaluated.add(new AbstractMap.SimpleImmutableEntry<>(sa, opinion));
+                }
+
                 if (opinion != AiPlayDecision.WillPlay) {
                     continue;
                 }
@@ -1683,7 +1700,13 @@ public class AiController {
         t.setDaemon(true);
         t.start();
         try {
-            return future.get(game.getAITimeout(), TimeUnit.SECONDS);
+            SpellAbility chosen = future.get(game.getAITimeout(), TimeUnit.SECONDS);
+            if (researchDecision) {
+                writeResearchSpellAbilityDecision(
+                        researchDecisionId, all.size(), researchExpandedCount.get(),
+                        researchEvaluated, chosen == null ? "PASS" : "CHOSEN", chosen);
+            }
+            return chosen;
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             e.printStackTrace();
             if (e instanceof TimeoutException) {
@@ -1713,8 +1736,72 @@ public class AiController {
                     // Stop support: dropped by Android and Java 20 / 26 removed it completely - so sadly thread will keep running
                 }
             }
+            if (researchDecision) {
+                String outcome = e instanceof TimeoutException ? "TIMEOUT"
+                        : e instanceof InterruptedException ? "INTERRUPTED" : "ERROR";
+                writeResearchSpellAbilityDecision(
+                        researchDecisionId, all.size(), researchExpandedCount.get(),
+                        researchEvaluated, outcome, null);
+            }
             // TODO mark some as skipped to increase chance to find something playable next priority
             return null;
+        }
+    }
+
+    private void writeResearchSpellAbilityDecision(
+            long decisionId,
+            int inputCandidateCount,
+            int expandedCandidateCount,
+            List<Map.Entry<SpellAbility, AiPlayDecision>> evaluated,
+            String outcome,
+            SpellAbility chosen) {
+        try {
+            final List<Map.Entry<SpellAbility, AiPlayDecision>> snapshot;
+            synchronized (evaluated) {
+                snapshot = new ArrayList<>(evaluated);
+            }
+
+            final List<ResearchDecisionRecord.Candidate> candidates = new ArrayList<>();
+            ResearchDecisionRecord.Candidate chosenCandidate = null;
+            int index = 0;
+            for (Map.Entry<SpellAbility, AiPlayDecision> item : snapshot) {
+                final SpellAbility sa = item.getKey();
+                final Card host = sa == null ? null : sa.getHostCard();
+                final ResearchDecisionRecord.Candidate candidate = new ResearchDecisionRecord.Candidate(
+                        ++index,
+                        host == null ? null : host.getName(),
+                        host == null ? null : host.getId(),
+                        host == null || host.getZone() == null ? null : host.getZone().getZoneType().name(),
+                        sa == null || sa.getApi() == null ? null : sa.getApi().name(),
+                        sa == null ? null : String.valueOf(sa),
+                        item.getValue() == null ? null : item.getValue().name()
+                );
+                candidates.add(candidate);
+                if (sa == chosen) {
+                    chosenCandidate = candidate;
+                }
+            }
+
+            final int turn = game.getPhaseHandler().getTurn();
+            final String phase = String.valueOf(game.getPhaseHandler().getPhase());
+            final ResearchDecisionRecord record = new ResearchDecisionRecord(
+                    decisionId,
+                    "SPELL_ABILITY",
+                    game.getStack().isEmpty() ? "NORMAL_PRIORITY" : "STACK_RESPONSE",
+                    turn,
+                    phase,
+                    player.getName(),
+                    game.getStack().size(),
+                    inputCandidateCount,
+                    expandedCandidateCount,
+                    candidates,
+                    outcome,
+                    chosenCandidate
+            );
+            game.getGameLog().addResearchDecision(record);
+        } catch (RuntimeException ex) {
+            // Research logging must never affect AI behavior.
+            System.err.println("Research decision log write failed: " + ex.getMessage());
         }
     }
 
