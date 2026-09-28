@@ -1435,7 +1435,18 @@ public class Player extends GameEntity implements Comparable<Player> {
 
         params.put(AbilityKey.Discard, true);
         params.put(AbilityKey.EffectOnly, effect);
-        final Card newCard = game.getAction().moveToGraveyard(c, sa, params);
+
+        final Card newCard;
+        if (ResearchMode.isEnabled()) {
+            ResearchHandTracker.beginNormalDiscard();
+        }
+        try {
+            newCard = game.getAction().moveToGraveyard(c, sa, params);
+        } finally {
+            if (ResearchMode.isEnabled()) {
+                ResearchHandTracker.endNormalDiscard();
+            }
+        }
 
         StringBuilder sb = new StringBuilder();
         sb.append(this).append(" discards ").append(c);
