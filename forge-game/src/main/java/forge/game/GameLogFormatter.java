@@ -333,9 +333,17 @@ public class GameLogFormatter extends IGameEventVisitor.Base<GameLogEntry> {
     @Subscribe
     public void recieve(GameEvent ev) {
         if (ResearchMode.isEnabled() && ev instanceof GameEventCardChangeZone zoneEvent
-                && zoneEvent.to() != null && zoneEvent.to().zoneType() == ZoneType.Hand
                 && zoneEvent.card() != null) {
-            log.addResearchHandAdd(zoneEvent, ResearchHandTracker.isDrawMove());
+            if (zoneEvent.to() != null && zoneEvent.to().zoneType() == ZoneType.Hand) {
+                log.addResearchHandAdd(zoneEvent, ResearchHandTracker.isDrawMove());
+            }
+
+            if (zoneEvent.from() != null && zoneEvent.to() != null
+                    && zoneEvent.from().zoneType() == ZoneType.Hand
+                    && zoneEvent.to().zoneType() == ZoneType.Graveyard
+                    && !ResearchHandTracker.isNormalDiscardMove()) {
+                log.addResearchUnflaggedDiscard(zoneEvent);
+            }
         }
 
         GameLogEntry le = ev.visit(this);
