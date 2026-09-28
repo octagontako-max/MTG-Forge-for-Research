@@ -76,6 +76,12 @@ public class GameLog extends Observable implements Serializable {
         this.notifyObservers();
     }
 
+    void addResearchHandAdd(forge.game.event.GameEventCardChangeZone event, boolean draw) {
+        if (ResearchMode.isEnabled()) {
+            ResearchGameLogJson.appendHandAdd(researchLogId, ++researchEventIndex, event, draw);
+        }
+    }
+
     /** All entries in chronological (insertion) order — note {@link #getLogEntries} returns newest-first. */
     public List<GameLogEntry> getAllEntries() {
         return new ArrayList<>(log);
