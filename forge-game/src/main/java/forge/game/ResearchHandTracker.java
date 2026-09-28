@@ -10,6 +10,7 @@ import forge.util.ResearchMode;
  */
 public final class ResearchHandTracker {
     private static final ThreadLocal<Integer> DRAW_DEPTH = ThreadLocal.withInitial(() -> 0);
+    private static final ThreadLocal<Integer> NORMAL_DISCARD_DEPTH = ThreadLocal.withInitial(() -> 0);
 
     private ResearchHandTracker() {
     }
@@ -34,5 +35,27 @@ public final class ResearchHandTracker {
 
     public static boolean isDrawMove() {
         return ResearchMode.isEnabled() && DRAW_DEPTH.get() > 0;
+    }
+
+    public static void beginNormalDiscard() {
+        if (ResearchMode.isEnabled()) {
+            NORMAL_DISCARD_DEPTH.set(NORMAL_DISCARD_DEPTH.get() + 1);
+        }
+    }
+
+    public static void endNormalDiscard() {
+        if (!ResearchMode.isEnabled()) {
+            return;
+        }
+        int depth = NORMAL_DISCARD_DEPTH.get() - 1;
+        if (depth <= 0) {
+            NORMAL_DISCARD_DEPTH.remove();
+        } else {
+            NORMAL_DISCARD_DEPTH.set(depth);
+        }
+    }
+
+    public static boolean isNormalDiscardMove() {
+        return ResearchMode.isEnabled() && NORMAL_DISCARD_DEPTH.get() > 0;
     }
 }
