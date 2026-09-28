@@ -90,6 +90,60 @@ final class ResearchGameLogJson {
         writeLine(sb.toString());
     }
 
+    static synchronized void appendDecision(long logId, long eventIndex, ResearchDecisionRecord decision) {
+        if (!ResearchMode.isEnabled() || decision == null) {
+            return;
+        }
+
+        StringBuilder sb = beginRecord(logId, eventIndex, "AI_DECISION");
+        numberField(sb, "decision_id", decision.decisionId()).append(',');
+        field(sb, "decision_type", decision.decisionType()).append(',');
+        field(sb, "context", decision.context()).append(',');
+        numberField(sb, "turn", decision.turn()).append(',');
+        field(sb, "phase", decision.phase()).append(',');
+        field(sb, "player", decision.player()).append(',');
+        numberField(sb, "stack_size", decision.stackSize()).append(',');
+        numberField(sb, "input_candidate_count", decision.inputCandidateCount()).append(',');
+        numberField(sb, "expanded_candidate_count", decision.expandedCandidateCount()).append(',');
+        numberField(sb, "evaluated_count", decision.evaluatedCandidates().size()).append(',');
+        field(sb, "outcome", decision.outcome()).append(',');
+        sb.append("\"chosen\":");
+        appendCandidate(sb, decision.chosen());
+        sb.append(',');
+        sb.append("\"evaluated_candidates\":[");
+        for (int i = 0; i < decision.evaluatedCandidates().size(); i++) {
+            if (i > 0) {
+                sb.append(',');
+            }
+            appendCandidate(sb, decision.evaluatedCandidates().get(i));
+        }
+        sb.append(']');
+        sb.append('}');
+        writeLine(sb.toString());
+    }
+
+    private static void appendCandidate(StringBuilder sb, ResearchDecisionRecord.Candidate candidate) {
+        if (candidate == null) {
+            sb.append("null");
+            return;
+        }
+        sb.append('{');
+        numberField(sb, "evaluation_index", candidate.evaluationIndex()).append(',');
+        field(sb, "card", candidate.card()).append(',');
+        sb.append("\"card_id\":");
+        if (candidate.cardId() == null) {
+            sb.append("null");
+        } else {
+            sb.append(candidate.cardId());
+        }
+        sb.append(',');
+        field(sb, "origin_zone", candidate.originZone()).append(',');
+        field(sb, "api", candidate.api()).append(',');
+        field(sb, "ability", candidate.ability()).append(',');
+        field(sb, "result", candidate.result());
+        sb.append('}');
+    }
+
     private static StringBuilder beginRecord(long logId, long eventIndex, String recordType) {
         StringBuilder sb = new StringBuilder(256);
         sb.append('{');
