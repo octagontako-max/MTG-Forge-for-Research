@@ -332,6 +332,12 @@ public class GameLogFormatter extends IGameEventVisitor.Base<GameLogEntry> {
 
     @Subscribe
     public void recieve(GameEvent ev) {
+        if (ResearchMode.isEnabled() && ev instanceof GameEventCardChangeZone zoneEvent
+                && zoneEvent.to() != null && zoneEvent.to().zoneType() == ZoneType.Hand
+                && zoneEvent.card() != null) {
+            log.addResearchHandAdd(zoneEvent, ResearchHandTracker.isDrawMove());
+        }
+
         GameLogEntry le = ev.visit(this);
         if (le != null) {
             log.add(le);
