@@ -1210,7 +1210,16 @@ public class Player extends GameEntity implements Comparable<Player> {
                 }
             }
 
-            c = game.getAction().moveTo(hand, c, cause, params);
+            if (ResearchMode.isEnabled()) {
+                ResearchHandTracker.beginDraw();
+            }
+            try {
+                c = game.getAction().moveTo(hand, c, cause, params);
+            } finally {
+                if (ResearchMode.isEnabled()) {
+                    ResearchHandTracker.endDraw();
+                }
+            }
             drawn.add(c);
 
             // CR 121.6c additional actions can't be performed when draw gets replaced
