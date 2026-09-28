@@ -1,6 +1,7 @@
 package forge.game;
 
 import forge.game.card.CardView;
+import forge.game.event.GameEventCardChangeZone;
 import forge.util.ResearchMode;
 
 import java.io.BufferedWriter;
@@ -12,11 +13,11 @@ import java.nio.file.StandardOpenOption;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Research-only mirror of the existing GameLog stream.
+ * Research-only JSONL output.
  *
- * <p>Each accepted GameLogEntry is written as one JSON object per line.
- * This class deliberately observes only entries that already reached
- * GameLog.add(...); it does not inspect game state or expand visibility.</p>
+ * <p>Existing GameLog entries are mirrored without changing normal logging.
+ * Research-only structured observations can also be appended through dedicated
+ * methods. All output is disabled when research mode is off.</p>
  */
 final class ResearchGameLogJson {
     static final String SYSTEM_PROPERTY = "forge.research.jsonLog";
@@ -39,6 +40,49 @@ final class ResearchGameLogJson {
             return;
         }
 
+        CardView source = entry.sourceCard();
+        StringBuilder sb = beginRecord(logId, eventIndex, "GAME_LOG");
+        field(sb, "type", entry.type().name()).append(',');
+        field(sb, "caption", entry.type().getCaption()).append(',');
+        field(sb, "message", entry.message()).append(',');
+        if (source == null) {
+            sb.append("\"source_card\":null");
+        } else {
+            field(sb, "source_card", source.getName());
+        }
+        sb.append('}');
+        writeLine(sb.toString());
+    }
+
+    static synchronized void appendHandAdd(long logId, long eventIndex,
+                                           GameEventCardChangeZone event,
+                                           boolean draw) {
+        if (!ResearchMode.isEnabled() || event == null || event.to() == null || event.card() == null) {
+            return;
+        }
+
+        StringBuilder sb = beginRecord(logId, eventIndex, "HAND_DELTA");
+        field(sb, "action", draw ? "DRAW" : "HAND_ADD").append(',');
+        field(sb, "player", event.to().player() == null ? null : event.to().player().getName()).append(',');
+        field(sb, "card", event.card().getName()).append(',');
+        field(sb, "from_zone", event.from() == null ? null : event.from().zoneType().name()).append(',');
+        field(sb, "to_zone", event.to().zoneType().name());
+        sb.append('}');
+        writeLine(sb.toString());
+    }
+
+    private static StringBuilder beginRecord(long logId, long eventIndex, String recordType) {
+        StringBuilder sb = new StringBuilder(256);
+        sb.append('{');
+        field(sb, "schema", "forge-research-gamelog-v1").append(',');
+        numberField(sb, "log_id", logId).append(',');
+        numberField(sb, "event_index", eventIndex).append(',');
+        numberField(sb, "timestamp_ms", System.currentTimeMillis()).append(',');
+        field(sb, "record_type", recordType).append(',');
+        return sb;
+    }
+
+    private static void writeLine(String json) {
         Path path = outputPath();
         try {
             Path parent = path.toAbsolutePath().getParent();
@@ -63,7 +107,7 @@ final class ResearchGameLogJson {
             }
 
             try (BufferedWriter writer = Files.newBufferedWriter(path, StandardCharsets.UTF_8, options)) {
-                writer.write(toJson(logId, eventIndex, entry));
+                writer.write(json);
                 writer.newLine();
             }
         } catch (IOException | RuntimeException ex) {
@@ -86,26 +130,6 @@ final class ResearchGameLogJson {
         return Path.of(configured);
     }
 
-    private static String toJson(long logId, long eventIndex, GameLogEntry entry) {
-        CardView source = entry.sourceCard();
-        StringBuilder sb = new StringBuilder(256);
-        sb.append('{');
-        field(sb, "schema", "forge-research-gamelog-v1").append(',');
-        numberField(sb, "log_id", logId).append(',');
-        numberField(sb, "event_index", eventIndex).append(',');
-        numberField(sb, "timestamp_ms", System.currentTimeMillis()).append(',');
-        field(sb, "type", entry.type().name()).append(',');
-        field(sb, "caption", entry.type().getCaption()).append(',');
-        field(sb, "message", entry.message()).append(',');
-        if (source == null) {
-            sb.append("\"source_card\":null");
-        } else {
-            field(sb, "source_card", source.getName());
-        }
-        sb.append('}');
-        return sb.toString();
-    }
-
     private static StringBuilder field(StringBuilder sb, String key, String value) {
         sb.append('"').append(escape(key)).append("\":");
         if (value == null) {
@@ -125,7 +149,7 @@ final class ResearchGameLogJson {
         for (int i = 0; i < value.length(); i++) {
             char c = value.charAt(i);
             switch (c) {
-                case '"' -> out.append("\\"");
+                case '"' -> out.append("\\\"");
                 case '\\' -> out.append("\\\\");
                 case '\b' -> out.append("\\b");
                 case '\f' -> out.append("\\f");
