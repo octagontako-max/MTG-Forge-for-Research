@@ -71,6 +71,25 @@ final class ResearchGameLogJson {
         writeLine(sb.toString());
     }
 
+    static synchronized void appendUnflaggedDiscard(long logId, long eventIndex,
+                                                    GameEventCardChangeZone event) {
+        if (!ResearchMode.isEnabled() || event == null || event.from() == null
+                || event.to() == null || event.card() == null) {
+            return;
+        }
+
+        StringBuilder sb = beginRecord(logId, eventIndex, "HAND_DELTA_EXCEPTION");
+        field(sb, "action", "UNFLAGGED_HAND_TO_GRAVEYARD").append(',');
+        field(sb, "classification", "DISCARD_CANDIDATE").append(',');
+        field(sb, "player", event.from().player() == null ? null : event.from().player().getName()).append(',');
+        field(sb, "card", event.card().getName()).append(',');
+        field(sb, "from_zone", event.from().zoneType().name()).append(',');
+        field(sb, "to_zone", event.to().zoneType().name()).append(',');
+        field(sb, "reason", "outside_Player.discard");
+        sb.append('}');
+        writeLine(sb.toString());
+    }
+
     private static StringBuilder beginRecord(long logId, long eventIndex, String recordType) {
         StringBuilder sb = new StringBuilder(256);
         sb.append('{');
