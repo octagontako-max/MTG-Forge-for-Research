@@ -88,6 +88,12 @@ public class GameLog extends Observable implements Serializable {
         }
     }
 
+    public synchronized void addResearchDecision(ResearchDecisionRecord decision) {
+        if (ResearchMode.isEnabled() && decision != null) {
+            ResearchGameLogJson.appendDecision(researchLogId, ++researchEventIndex, decision);
+        }
+    }
+
     /** All entries in chronological (insertion) order — note {@link #getLogEntries} returns newest-first. */
     public List<GameLogEntry> getAllEntries() {
         return new ArrayList<>(log);
