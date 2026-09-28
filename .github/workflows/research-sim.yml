@@ -10,7 +10,10 @@ on:
       - ".github/workflows/research-sim.yml"
       - "forge-core/src/main/java/forge/util/ResearchMode.java"
       - "forge-game/src/main/java/forge/game/GameLog.java"
+      - "forge-game/src/main/java/forge/game/GameLogFormatter.java"
       - "forge-game/src/main/java/forge/game/ResearchGameLogJson.java"
+      - "forge-game/src/main/java/forge/game/ResearchHandTracker.java"
+      - "forge-game/src/main/java/forge/game/player/Player.java"
   workflow_dispatch:
 
 jobs:
