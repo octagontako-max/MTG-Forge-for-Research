@@ -50,6 +50,7 @@ jobs:
             echo "DECK2=$DECK2"
             echo "GAMES=$GAMES"
             echo "MATCH_SIZE=$MATCH_SIZE"
+            echo "MATCH_COUNT=${MATCH_COUNT:-1}"
             echo "SEED=$SEED"
             echo "TIMEOUT=$TIMEOUT"
             echo "QUIET=$QUIET"
