@@ -89,34 +89,51 @@ jobs:
             exit 1
           fi
 
-          ARGS=(
+          BASE_ARGS=(
             sim
             -D "$GITHUB_WORKSPACE/$DECK_DIR"
             -d "$DECK1" "$DECK2"
-            -s "$SEED"
             -c "$TIMEOUT"
           )
 
-          if [ "$MATCH_SIZE" -gt 0 ]; then
-            ARGS+=( -m "$MATCH_SIZE" )
-          else
-            ARGS+=( -n "$GAMES" )
-          fi
-
           if [ "$QUIET" = "true" ]; then
-            ARGS+=( -q )
+            BASE_ARGS+=( -q )
           fi
 
           echo "Research mode: $RESEARCH_MODE"
+          echo "Match size: $MATCH_SIZE"
+          echo "Match count: $MATCH_COUNT"
+
+          : > "$GITHUB_WORKSPACE/research-sim.log"
+          : > "$GITHUB_WORKSPACE/research-playlog.jsonl"
 
           cd forge-gui
-          java \
-            -Djava.awt.headless=true \
-            -Dforge.research="$RESEARCH_MODE" \
-            -Dforge.research.jsonLog="$GITHUB_WORKSPACE/research-playlog.jsonl" \
-            -jar "../${{ steps.jar.outputs.jar }}" \
-            "${ARGS[@]}" \
-            2>&1 | tee ../research-sim.log
+
+          if [ "$MATCH_SIZE" -gt 0 ]; then
+            for i in $(seq 1 "$MATCH_COUNT"); do
+              RUN_SEED=$((SEED + i - 1))
+              RUN_JSON="$GITHUB_WORKSPACE/research-playlog-$i.jsonl"
+              echo "===== MATCH $i / $MATCH_COUNT | seed=$RUN_SEED =====" | tee -a "$GITHUB_WORKSPACE/research-sim.log"
+              java \
+                -Djava.awt.headless=true \
+                -Dforge.research="$RESEARCH_MODE" \
+                -Dforge.research.jsonLog="$RUN_JSON" \
+                -jar "../${{ steps.jar.outputs.jar }}" \
+                "${BASE_ARGS[@]}" -s "$RUN_SEED" -m "$MATCH_SIZE" \
+                2>&1 | tee -a "$GITHUB_WORKSPACE/research-sim.log"
+              if [ -f "$RUN_JSON" ]; then
+                cat "$RUN_JSON" >> "$GITHUB_WORKSPACE/research-playlog.jsonl"
+              fi
+            done
+          else
+            java \
+              -Djava.awt.headless=true \
+              -Dforge.research="$RESEARCH_MODE" \
+              -Dforge.research.jsonLog="$GITHUB_WORKSPACE/research-playlog.jsonl" \
+              -jar "../${{ steps.jar.outputs.jar }}" \
+              "${BASE_ARGS[@]}" -s "$SEED" -n "$GAMES" \
+              2>&1 | tee -a "$GITHUB_WORKSPACE/research-sim.log"
+          fi
 
       - name: Show result summary
         if: always()
